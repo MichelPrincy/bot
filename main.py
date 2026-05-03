@@ -244,7 +244,7 @@ votre limite de CashCoin.
 
     def update_script(self):
         print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
-        url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
+        url = "https://raw.githubusercontent.com/MichelPrincy/bot/main/main.py"
         try:
             response = requests.get(url)
             if response.status_code == 200:
@@ -808,12 +808,12 @@ votre limite de CashCoin.
             db_cash = f"{YELLOW}{self.current_user['cashnow']}/{self.current_user['max']}{RESET}" if self.current_user else "0/0"
 
             print(f"""
-{BLUE}███╗   ███╗██╗ ██████╗██╗  ██╗
-████╗ ████║██║██╔════╝██║  ██║
-██╔████╔██║██║██║     ███████║
-██║╚██╔╝██║██║██║     ██╔══██║
-██║ ╚═╝ ██║██║╚██████╗██║  ██║
-╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
+{BLUE}███████╗██████╗ ███████╗███████╗██████╗ 
+██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗
+███████╗██████╔╝█████╗  █████╗  ██║  ██║
+╚════██║██╔═══╝ ██╔══╝  ██╔══╝  ██║  ██║
+███████║██║     ███████╗███████╗██████╔╝
+╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
 {WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
