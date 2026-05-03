@@ -386,7 +386,7 @@ votre limite de CashCoin.
                 # 👆 FIN DU NOUVEAU BLOC
                 
                 # 1. Cliquer sur l'icône commentaire
-                os.system(f"{self.adb} input tap 995 1263")
+                os.system(f"{self.adb} input tap 1000 1500")
                 await asyncio.sleep(3)
             
                 if self.d(className="android.widget.EditText").exists(timeout=5):
@@ -425,11 +425,11 @@ votre limite de CashCoin.
                     # --- EXÉCUTION DIRECTE DE LA SUITE ---
                     # 3. Cliquer sur (575, 554) pour désactiver/réduire le clavier
                     print(f"{CYAN}    -> Réduction du clavier (clic zone neutre)...{RESET}")
-                    os.system(f"{self.adb} input tap 575 554")
+                    os.system(f"{self.adb} input tap 500 400")
                     await asyncio.sleep(1.5) 
             
                     # 4. Envoyer avec les coordonnées fixes (965, 2095)
-                    print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
+                    print(f"{GREEN}    -> Envoi (Coordonnées fixes : 950, 2140)...{RESET}")
                     # Chercher le bouton Send par description ou ID
                     send_btn = self.d(descriptionContains="Send") or \
                                self.d(resourceIdMatches=".*send.*") or \
@@ -815,7 +815,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
