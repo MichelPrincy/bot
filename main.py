@@ -610,18 +610,45 @@ votre limite de CashCoin.
         await self.send_bot_command("TikTok")
         await self.client.run_until_disconnected()
 
+    #dd
     async def timeout_watcher(self):
-        """Surveille s'il n'y a pas de réponse du bot après 200 secondes."""
+        """Si rien ne se passe pendant 3 min, envoie une séquence de reset."""
         while True:
             await asyncio.sleep(10)
-
-            if time.time() - self.last_activity_time > 200:
-                if self.last_sent_msg:
-                    print(f"\n{RED}⏳ Timeout détecté. Le réseau ou le bot a buggé.{RESET}")
-                    print(f"{CYAN}🔄 Renvoi de la dernière commande : {self.last_sent_msg}{RESET}")
-
-                    self.last_activity_time = time.time()
-                    await self.send_bot_command(self.last_sent_msg)
+    
+            if time.time() - self.last_activity_time > 180:  # 3 minutes
+                print(f"\n{RED}⏳ 3 min sans activité — Lancement séquence reset...{RESET}")
+    
+                # Reset du timer immédiatement pour éviter le spam
+                self.last_activity_time = time.time()
+    
+                # Fermeture des apps au cas où une tâche serait bloquée
+                self.cleanup_apps()
+                self.focus_termux()
+    
+                # Séquence de reset avec intervalle de 4 secondes
+                sequence = [
+                    ("🔙Back",    "Retour 1/3"),
+                    ("🔙Back",    "Retour 2/3"),
+                    ("🔙Back",    "Retour 3/3"),
+                    ("📝Tasks📝", "Accès aux tâches"),
+                ]
+    
+                for cmd, label in sequence:
+                    print(f"{CYAN}  → {label} : envoi '{cmd}'{RESET}")
+                    await self.send_bot_command(cmd)
+                    await asyncio.sleep(4)
+    
+                # Passer au compte suivant
+                self.get_next_active_index()
+                next_acc = self.accounts[self.index]
+                print(f"{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
+    
+                # Relancer sur le compte suivant
+                await asyncio.sleep(2)
+                self.last_sent_msg = "TikTok"
+                await self.send_bot_command("TikTok")
+                print(f"{GREEN}✅ Reset terminé. Bot relancé sur : {next_acc}{RESET}")
 
     async def on_message(self, event):
         self.last_activity_time = time.time()
@@ -822,27 +849,6 @@ votre limite de CashCoin.
             await self.send_bot_command("TikTok")
             return
 
-        # --- FIGÉ SUR LE MENU D'ACCUEIL ---
-        elif "Marketing Balance" in text or "How to work" in text:
-            print(f"{YELLOW}🏠 Figé sur le menu d'accueil. Envoi Tasks + TikTok...{RESET}")
-            await self.send_bot_command("📝Tasks📝")
-            await asyncio.sleep(2)
-            await self.send_bot_command("TikTok")
-            return
-
-        # --- 5. COMPTE A RÉPARER ---
-        elif "🔴 Account" in text or "too" in text:
-            print(f"{YELLOW}⚠️ Compte à réparer : passage au suivant.{RESET}", flush=True)
-            self.get_next_active_index()
-            next_acc = self.accounts[self.index]
-            if next_acc in self.paused_accounts:
-                await self.client.disconnect()
-                return
-            await asyncio.sleep(2)
-            print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-            self.last_sent_msg = "TikTok"
-            await self.send_bot_command("TikTok")
-
         # --- TIMEOUT DE TÂCHE ---
         elif "The task wasn't completed within 2 minutes" in text:
             print(f"{YELLOW}⏳ Timeout de tâche détecté. Fermeture de TikTok et relance...{RESET}")
@@ -880,7 +886,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
