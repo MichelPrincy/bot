@@ -62,6 +62,7 @@ class TikTokTaskBot:
         self.stats = self.load_json("stats.json", {"earned": 0.0, "tasks": 0})
         self.index = 0
         self.device_id = None
+        self.device_ip = None
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         self.d = None 
@@ -77,6 +78,66 @@ class TikTokTaskBot:
         self.user_session_file = "user_session.json"
         self.current_user = None # Stockera les infos de l'utilisateur connecté
         self.dynamic_chooser = APP_CHOOSER.copy()
+
+
+
+    def ask_and_connect_adb(self):
+        """Demande l'IP WiFi, connecte ADB pour la session"""
+        clear_screen()
+        print(f"{CYAN}📡 CONNEXION ADB WiFi{RESET}")
+        print(f"{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
+        ip = input(f"{BOLD}📍 Entrez l'IP WiFi du téléphone\n   (ex: 192.168.1.103) : {RESET}").strip()
+    
+        if not ip:
+            print(f"{RED}❌ IP invalide.{RESET}")
+            return self.ask_and_connect_adb()
+    
+        self.device_ip = ip
+        target = f"{ip}:5555"
+    
+        print(f"{YELLOW}🔌 Lancement : adb connect {target}...{RESET}")
+        result = subprocess.run(["adb", "connect", target], capture_output=True, text=True)
+        output = result.stdout.strip()
+        print(f"{WHITE}{output}{RESET}")
+    
+        if "connected" in output.lower() or "already connected" in output.lower():
+            self.device_id = target
+            self.adb = f"adb -s {target} shell"
+            print(f"{GREEN}✅ ADB connecté : {target}{RESET}")
+            time.sleep(1.5)
+            return True
+        else:
+            print(f"{RED}❌ Échec. Vérifiez :{RESET}")
+            print(f"  - WiFi activé sur le téléphone")
+            print(f"  - Débogage USB sans fil activé")
+            print(f"  - IP correcte")
+            retry = input(f"{YELLOW}Réessayer ? (o/n) : {RESET}").strip().lower()
+            if retry == 'o':
+                return self.ask_and_connect_adb()
+            exit()
+
+    def reconnect_adb(self):
+        """Reconnecte ADB silencieusement avant chaque tâche"""
+        if not self.device_ip:
+            return False
+        target = f"{self.device_ip}:5555"
+        try:
+            result = subprocess.run(
+                ["adb", "connect", target],
+                capture_output=True, text=True, timeout=5
+            )
+            output = result.stdout.strip()
+            if "connected" in output.lower() or "already" in output.lower():
+                self.device_id = target
+                self.adb = f"adb -s {target} shell"
+                return True
+            # Déconnexion forcée puis reconnexion
+            subprocess.run(["adb", "disconnect", target], capture_output=True)
+            result2 = subprocess.run(["adb", "connect", target], capture_output=True, text=True, timeout=5)
+            return "connected" in result2.stdout.lower()
+        except Exception as e:
+            print(f"{RED}⚠️ Reconnexion ADB échouée : {e}{RESET}")
+            return False
 
     def load_json(self, file, default):
         if os.path.exists(file):
@@ -350,12 +411,18 @@ votre limite de CashCoin.
     # ---------- ACTIONS  ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
+            # ← AJOUTER CES LIGNES EN PREMIER
+            print(f"{YELLOW}🔄 Reconnexion ADB...{RESET}", flush=True)
+            self.reconnect_adb()
+            if self.d is None or not self.device_id:
+                self.detect_device()
+            # ← FIN DES LIGNES AJOUTÉES
             self.cleanup_apps()
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
             # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
-            await asyncio.sleep(5)
+            await asyncio.sleep(7)
             os.system(f"{self.adb} input tap {coord_clone}")
             await asyncio.sleep(30) # Chargement
 
@@ -794,6 +861,9 @@ votre limite de CashCoin.
 
     # ---------- MENU PRINCIPAL ----------
     async def menu(self):
+        # ← AJOUTER EN PREMIER (avant authenticate_user)
+        self.ask_and_connect_adb()
+        # ← FIN
         # AUTHENTIFICATION OBLIGATOIRE AU DÉMARRAGE
         self.authenticate_user()
 
@@ -815,7 +885,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
