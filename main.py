@@ -355,17 +355,17 @@ votre limite de CashCoin.
             
             # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
-            await asyncio.sleep(4)
+            await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(25) # Chargement
+            await asyncio.sleep(30) # Chargement
 
             # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
             
             print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
-            await asyncio.sleep(10)
+            await asyncio.sleep(15)
 
             # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
@@ -815,7 +815,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
