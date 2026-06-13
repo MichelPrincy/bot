@@ -120,7 +120,6 @@ class TikTokTaskBot:
     
         for attempt in range(retries):
             try:
-                print(f"{YELLOW}🔄 Reconnexion ADB ({attempt+1}/{retries})...{RESET}", flush=True)
     
                 # 1. On force une déconnexion propre (efface l'état "offline" fantôme)
                 subprocess.run(["adb", "disconnect", target], capture_output=True, timeout=8)
@@ -129,7 +128,7 @@ class TikTokTaskBot:
                 # 2. Reconnexion
                 result = subprocess.run(["adb", "connect", target], capture_output=True, text=True, timeout=10)
                 output = result.stdout.strip()
-                print(f"{WHITE}  → {output}{RESET}", flush=True)
+             
     
                 if "connected" not in output.lower():
                     time.sleep(2)
@@ -462,7 +461,7 @@ votre limite de CashCoin.
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(7)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(30)  # Chargement
+            await asyncio.sleep(25)  # Chargement
 
             # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
@@ -470,7 +469,7 @@ votre limite de CashCoin.
             os.system(f"{self.adb} input tap {coord_clone}")
 
             print(f"{YELLOW}⏳ Attente stricte 15s...{RESET}", flush=True)
-            await asyncio.sleep(15)
+            await asyncio.sleep(10)
 
             # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
@@ -880,7 +879,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
