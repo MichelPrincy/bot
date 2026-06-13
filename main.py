@@ -446,57 +446,59 @@ votre limite de CashCoin.
         alarm_thread.join()
 
     # ---------- ACTIONS ----------
-
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
-            # ✅ RECONNEXION EN TOUT PREMIER — avant toute action ADB
+            # ✅ RECONNEXION #1 — avant l'ouverture du premier lien
             if not self.reconnect_adb():
-                print(f"{RED}❌ Appareil non disponible. Tâche annulée.{RESET}", flush=True)
+                print(f"{RED}❌ Appareil non disponible (étape 1). Tâche annulée.{RESET}", flush=True)
                 return False
-
+    
             self.cleanup_apps()
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
-
-            # 1. Ouverture ADB
+    
+            # 1. Ouverture ADB (premier lien)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(7)
             os.system(f"{self.adb} input tap {coord_clone}")
             await asyncio.sleep(25)  # Chargement
-
+    
+            # ✅ RECONNEXION #2 — avant l'ouverture du deuxième lien (refresh)
+            if not self.reconnect_adb():
+                print(f"{RED}❌ Appareil non disponible (étape 2). Tâche annulée.{RESET}", flush=True)
+                return False
+    
             # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-
-            print(f"{YELLOW}⏳ Attente stricte 15s...{RESET}", flush=True)
+    
+            print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
             await asyncio.sleep(10)
-
+    
             # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
             action_lower = action.lower()
-
+    
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
                 print(f"{MAGENTA}    💬 Mode Commentaire (Stratégie Clavier Fixe)...{RESET}", flush=True)
-                print(f"{YELLOW}🔌 Reconnexion de uiautomator2 en cours...{RESET}")
-                try:
-                    self.d = u2.connect(self.device_id)
-                    self.d.implicitly_wait(10.0)
-                    self.d.settings['operation_delay'] = (0.2, 0.2)
-                except Exception as e:
-                    print(f"{RED}⚠️ Erreur lors de la reconnexion U2 : {e}{RESET}")
-
-                os.system(f"{self.adb} input tap 1000 1500")
+    
+                # ✅ RECONNEXION #3 — avant de chercher le champ texte
+                if not self.reconnect_adb():
+                    print(f"{RED}❌ Appareil non disponible (étape 3 - comment). Tâche annulée.{RESET}", flush=True)
+                    return False
+    
+                os.system(f"{self.adb} input tap 658 889")
                 await asyncio.sleep(3)
-
+    
                 if self.d(className="android.widget.EditText").exists(timeout=5):
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
-
+    
                     text_to_send = specific_text if specific_text else "Wow super video 🔥"
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-
+    
                     try:
                         subprocess.run(
                             f'adb -s {self.device_id} shell am broadcast -a clipper.set -e text "{text_to_send}"',
@@ -512,68 +514,90 @@ votre limite de CashCoin.
                             import base64
                             b64 = base64.b64encode(text_to_send.encode()).decode()
                             os.system(f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}")
-
+    
                     await asyncio.sleep(1)
-
+    
                     print(f"{CYAN}    -> Réduction du clavier (clic zone neutre)...{RESET}")
-                    os.system(f"{self.adb} input tap 500 400")
+                    os.system(f"{self.adb} input tap 360 396")
                     await asyncio.sleep(1.5)
-
-                    print(f"{GREEN}    -> Envoi (Coordonnées fixes : 950, 2140)...{RESET}")
+    
+                    # ✅ RECONNEXION #4 — avant le clic sur Envoyer
+                    if not self.reconnect_adb():
+                        print(f"{RED}❌ Appareil non disponible (étape 4 - envoi commentaire). Tâche annulée.{RESET}", flush=True)
+                        return False
+    
+                    print(f"{GREEN}    -> Envoi (Coordonnées fixes : 624, 1361)...{RESET}")
                     send_btn = self.d(descriptionContains="Send") or \
                                self.d(resourceIdMatches=".*send.*") or \
                                self.d(textContains="Post")
-
+    
                     if send_btn.exists(timeout=3):
                         send_btn.click()
                     else:
-                        os.system(f"{self.adb} input tap 960 2085")
-
+                        os.system(f"{self.adb} input tap 624 1361")
+    
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
-
-                    os.system(f"{self.adb} input tap 500 200")
+    
+                    os.system(f"{self.adb} input tap 360 395")
                 else:
                     print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
-
+    
             # --- FOLLOW ---
             elif "follow" in action_lower or "profile" in action_lower:
+    
+                # ✅ RECONNEXION #3 — avant de chercher le bouton Follow
+                if not self.reconnect_adb():
+                    print(f"{RED}❌ Appareil non disponible (étape 3 - recherche follow). Tâche annulée.{RESET}", flush=True)
+                    return False
+    
                 print(f"{CYAN}    👤 Recherche bouton Follow...{RESET}", flush=True)
-                clicked = False
+                target_el = None
                 for keyword in FOLLOW_KEYWORDS:
                     if self.d(textContains=keyword).exists:
-                        self.d(textContains=keyword).click()
-                        print(f"{GREEN}    -> Clic sur '{keyword}'{RESET}")
-                        clicked = True
+                        target_el = self.d(textContains=keyword)
                         break
-
-                if not clicked:
-                    if self.d(resourceIdMatches=".*follow_btn.*").exists:
-                        self.d(resourceIdMatches=".*follow_btn.*").click()
-                        print(f"{GREEN}    -> Clic sur Follow (via ID){RESET}")
-                    else:
-                        print(f"{RED}    ❌ Bouton Follow introuvable{RESET}")
-
+                if target_el is None and self.d(resourceIdMatches=".*follow_btn.*").exists:
+                    target_el = self.d(resourceIdMatches=".*follow_btn.*")
+    
+                if target_el is not None:
+                    # ✅ RECONNEXION #4 — avant le clic sur Follow
+                    if not self.reconnect_adb():
+                        print(f"{RED}❌ Appareil non disponible (étape 4 - clic follow). Tâche annulée.{RESET}", flush=True)
+                        return False
+    
+                    target_el.click()
+                    print(f"{GREEN}    -> Clic sur Follow{RESET}")
+                else:
+                    print(f"{RED}    ❌ Bouton Follow introuvable{RESET}")
+    
             # --- LIKE ---
             else:
+                # ✅ RECONNEXION #3 — avant la recherche/clic du like
+                if not self.reconnect_adb():
+                    print(f"{RED}❌ Appareil non disponible (étape 3 - like). Tâche annulée.{RESET}", flush=True)
+                    return False
+    
                 print(f"{CYAN}    ❤️  Mode Like...{RESET}", flush=True)
                 self.d.click(0.5, 0.5)
                 await asyncio.sleep(0.5)
-
-                liked_success = False
+    
+                # ✅ RECONNEXION #4 — avant le clic effectif sur like
+                if not self.reconnect_adb():
+                    print(f"{RED}❌ Appareil non disponible (étape 4 - clic like). Tâche annulée.{RESET}", flush=True)
+                    return False
+    
                 if self.d(descriptionMatches=LIKE_DESC_REGEX).exists:
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
-                    liked_success = True
-                elif not liked_success:
+                else:
                     print(f"{MAGENTA}    🚀 Fallback : DOUBLE TAP{RESET}")
-                    self.d.double_click(0.5, 0.5, duration=0.1)
-                    liked_success = True
-
+                    os.system(f"{self.adb} input tap 660 768")
+    
             await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
             self.focus_termux()
             return True
-
+    
         except Exception as e:
             print(f"Erreur Task: {e}", flush=True)
             return False
@@ -879,7 +903,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.2 (adb) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
