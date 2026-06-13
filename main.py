@@ -116,28 +116,52 @@ class TikTokTaskBot:
                 return self.ask_and_connect_adb()
             exit()
 
-    def reconnect_adb(self):
-        """Reconnecte ADB silencieusement avant chaque tâche"""
+   def reconnect_adb(self, retries=3):
+        """Déconnecte, reconnecte ADB et uiautomator2 avant chaque tâche"""
         if not self.device_ip:
             return False
+    
         target = f"{self.device_ip}:5555"
-        try:
-            result = subprocess.run(
-                ["adb", "connect", target],
-                capture_output=True, text=True, timeout=5
-            )
-            output = result.stdout.strip()
-            if "connected" in output.lower() or "already" in output.lower():
-                self.device_id = target
-                self.adb = f"adb -s {target} shell"
-                return True
-            # Déconnexion forcée puis reconnexion
-            subprocess.run(["adb", "disconnect", target], capture_output=True)
-            result2 = subprocess.run(["adb", "connect", target], capture_output=True, text=True, timeout=5)
-            return "connected" in result2.stdout.lower()
-        except Exception as e:
-            print(f"{RED}⚠️ Reconnexion ADB échouée : {e}{RESET}")
-            return False
+    
+        for attempt in range(retries):
+            try:
+                print(f"{YELLOW}🔄 Reconnexion ADB ({attempt+1}/{retries})...{RESET}", flush=True)
+    
+                # ÉTAPE 1 : Déconnexion propre
+                subprocess.run(["adb", "disconnect", target],
+                               capture_output=True, timeout=5)
+                time.sleep(1)
+    
+                # ÉTAPE 2 : Reconnexion
+                result = subprocess.run(
+                    ["adb", "connect", target],
+                    capture_output=True, text=True, timeout=10
+                )
+                output = result.stdout.strip()
+                print(f"{WHITE}  → {output}{RESET}", flush=True)
+    
+                if "connected" in output.lower():
+                    self.device_id = target
+                    self.adb = f"adb -s {target} shell"
+    
+                    # ÉTAPE 3 : Réinitialiser uiautomator2
+                    try:
+                        self.d = u2.connect(target)
+                        self.d.implicitly_wait(10.0)
+                        self.d.settings['operation_delay'] = (0.2, 0.2)
+                        print(f"{GREEN}✅ ADB + U2 reconnectés !{RESET}", flush=True)
+                        return True
+                    except Exception as e:
+                        print(f"{RED}⚠️ U2 échoué : {e}{RESET}", flush=True)
+    
+                time.sleep(2)
+    
+            except Exception as e:
+                print(f"{RED}⚠️ Erreur tentative {attempt+1} : {e}{RESET}", flush=True)
+                time.sleep(2)
+    
+        print(f"{RED}❌ Reconnexion impossible après {retries} tentatives.{RESET}", flush=True)
+        return False
 
     def load_json(self, file, default):
         if os.path.exists(file):
@@ -411,12 +435,7 @@ votre limite de CashCoin.
     # ---------- ACTIONS  ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
-            # ← AJOUTER CES LIGNES EN PREMIER
-            print(f"{YELLOW}🔄 Reconnexion ADB...{RESET}", flush=True)
-            self.reconnect_adb()
-            if self.d is None or not self.device_id:
-                self.detect_device()
-            # ← FIN DES LIGNES AJOUTÉES
+            
             self.cleanup_apps()
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
@@ -430,6 +449,13 @@ votre limite de CashCoin.
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
+            # ← AJOUTER CES LIGNES EN PREMIER
+            print(f"{YELLOW}🔄 Reconnexion ADB...{RESET}", flush=True)
+            self.reconnect_adb()
+            if not self.reconnect_adb():
+            print(f"{RED}❌ Appareil non disponible. Tâche annulée.{RESET}", flush=True)
+            return False
+            # ← FIN DES LIGNES AJOUTÉES
             
             print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
             await asyncio.sleep(15)
@@ -885,7 +911,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
