@@ -56,6 +56,8 @@ def clear_screen():
 class TikTokTaskBot:
 
     def __init__(self):
+        self.keepalive_running = False
+        self.keepalive_thread = None
         self.accounts = self.load_json("accounts.json", [])
         self.paused_accounts = self.load_json("paused.json", [])
         self.stats = self.load_json("stats.json", {"earned": 0.0, "tasks": 0})
@@ -97,6 +99,7 @@ class TikTokTaskBot:
             self.device_id = target
             self.adb = f"adb -s {target} shell"
             print(f"{GREEN}✅ ADB connecté : {target}{RESET}")
+            self.start_adb_keepalive()
             time.sleep(1.5)
             return True
         else:
@@ -108,53 +111,74 @@ class TikTokTaskBot:
             if retry == 'o':
                 return self.ask_and_connect_adb()
             exit()
-
+    #ff
     def reconnect_adb(self, retries=3):
-        """Déconnecte, reconnecte ADB et uiautomator2 avant chaque tâche"""
+        """Reconnecte ADB et uiautomator2 avant chaque tâche"""
         if not self.device_ip:
             return False
-
+    
         target = f"{self.device_ip}:5555"
-
+    
         for attempt in range(retries):
             try:
                 print(f"{YELLOW}🔄 Reconnexion ADB ({attempt+1}/{retries})...{RESET}", flush=True)
-
-                # ÉTAPE 1 : Déconnexion propre
-                subprocess.run(["adb", "disconnect", target], capture_output=True, timeout=5)
-                time.sleep(1)
-
-                # ÉTAPE 2 : Reconnexion
+    
+                # ÉTAPE 1 : Connexion ADB
                 result = subprocess.run(
                     ["adb", "connect", target],
                     capture_output=True, text=True, timeout=10
                 )
                 output = result.stdout.strip()
                 print(f"{WHITE}  → {output}{RESET}", flush=True)
-
+    
                 if "connected" in output.lower():
                     self.device_id = target
                     self.adb = f"adb -s {target} shell"
-
-                    # ÉTAPE 3 : Réinitialiser uiautomator2
+    
+                    # ÉTAPE 2 : Vérification rapide avant u2
+                    check = subprocess.run(
+                        ["adb", "-s", target, "shell", "echo", "ok"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if "ok" not in check.stdout:
+                        print(f"{RED}⚠️ Vérification ADB échouée{RESET}", flush=True)
+                        time.sleep(2)
+                        continue
+    
+                    # ÉTAPE 3 : Connexion uiautomator2
                     try:
                         self.d = u2.connect(target)
                         self.d.implicitly_wait(10.0)
                         self.d.settings['operation_delay'] = (0.2, 0.2)
-                        print(f"{GREEN}✅ ADB + U2 reconnectés !{RESET}", flush=True)
-                        return True
                     except Exception as e:
                         print(f"{RED}⚠️ U2 échoué : {e}{RESET}", flush=True)
-
+    
+                    # ÉTAPE 4 : Re-connecter ADB APRÈS u2 (car u2 redémarre le daemon)
+                    subprocess.run(
+                        ["adb", "connect", target],
+                        capture_output=True, timeout=8
+                    )
+                    time.sleep(1)
+    
+                    # ÉTAPE 5 : Vérification finale
+                    final_check = subprocess.run(
+                        ["adb", "-s", target, "shell", "echo", "ok"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if "ok" in final_check.stdout:
+                        print(f"{GREEN}✅ ADB + U2 prêts !{RESET}", flush=True)
+                        return True
+                    else:
+                        print(f"{RED}⚠️ Connexion instable, nouvelle tentative...{RESET}", flush=True)
+    
                 time.sleep(2)
-
+    
             except Exception as e:
                 print(f"{RED}⚠️ Erreur tentative {attempt+1} : {e}{RESET}", flush=True)
                 time.sleep(2)
-
+    
         print(f"{RED}❌ Reconnexion impossible après {retries} tentatives.{RESET}", flush=True)
         return False
-
     # ================== JSON ==================
 
     def load_json(self, file, default):
@@ -169,6 +193,31 @@ class TikTokTaskBot:
     def save_json(self, file, data):
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
+
+    def _adb_keepalive_loop(self):
+        """Tourne en arrière-plan, reconnecte ADB toutes les 5 secondes"""
+        while self.keepalive_running:
+            if self.device_ip:
+                target = f"{self.device_ip}:5555"
+                subprocess.run(
+                    ["adb", "connect", target],
+                    capture_output=True, timeout=4
+                )
+            time.sleep(5)
+
+    def start_adb_keepalive(self):
+        """Lance le thread de maintien ADB en arrière-plan"""
+        self.keepalive_running = True
+        self.keepalive_thread = threading.Thread(
+            target=self._adb_keepalive_loop,
+            daemon=True  # ← s'arrête automatiquement quand le script s'arrête
+        )
+        self.keepalive_thread.start()
+        print(f"{GREEN}🔁 Keepalive ADB démarré (toutes les 5s){RESET}")
+    
+    def stop_adb_keepalive(self):
+        """Arrête le thread keepalive"""
+        self.keepalive_running = False
 
     # ================== GESTION UTILISATEUR (SUPABASE) ==================
 
@@ -831,7 +880,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
