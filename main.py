@@ -113,7 +113,6 @@ class TikTokTaskBot:
             exit()
     #ff
     def reconnect_adb(self, retries=3):
-        """Reconnecte ADB et uiautomator2 avant chaque tâche"""
         if not self.device_ip:
             return False
     
@@ -123,29 +122,27 @@ class TikTokTaskBot:
             try:
                 print(f"{YELLOW}🔄 Reconnexion ADB ({attempt+1}/{retries})...{RESET}", flush=True)
     
-                # ÉTAPE 1 : Connexion ADB
-                result = subprocess.run(
-                    ["adb", "connect", target],
-                    capture_output=True, text=True, timeout=10
-                )
+                # 1. On force une déconnexion propre (efface l'état "offline" fantôme)
+                subprocess.run(["adb", "disconnect", target], capture_output=True, timeout=8)
+                time.sleep(0.5)
+    
+                # 2. Reconnexion
+                result = subprocess.run(["adb", "connect", target], capture_output=True, text=True, timeout=10)
                 output = result.stdout.strip()
                 print(f"{WHITE}  → {output}{RESET}", flush=True)
     
-                if "connected" in output.lower():
-                    self.device_id = target
-                    self.adb = f"adb -s {target} shell"
+                if "connected" not in output.lower():
+                    time.sleep(2)
+                    continue
     
-                    # ÉTAPE 2 : Vérification rapide avant u2
-                    check = subprocess.run(
-                        ["adb", "-s", target, "shell", "echo", "ok"],
-                        capture_output=True, text=True, timeout=5
-                    )
-                    if "ok" not in check.stdout:
-                        print(f"{RED}⚠️ Vérification ADB échouée{RESET}", flush=True)
-                        time.sleep(2)
-                        continue
+                self.device_id = target
+                self.adb = f"adb -s {target} shell"
     
-                    # ÉTAPE 3 : Connexion uiautomator2
+                # 3. Vérification de l'état réel via "adb devices"
+                devices_out = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=8).stdout
+    
+                if f"{target}\tdevice" in devices_out:
+                    # OK, vraiment connecté
                     try:
                         self.d = u2.connect(target)
                         self.d.implicitly_wait(10.0)
@@ -153,25 +150,20 @@ class TikTokTaskBot:
                     except Exception as e:
                         print(f"{RED}⚠️ U2 échoué : {e}{RESET}", flush=True)
     
-                    # ÉTAPE 4 : Re-connecter ADB APRÈS u2 (car u2 redémarre le daemon)
-                    subprocess.run(
-                        ["adb", "connect", target],
-                        capture_output=True, timeout=8
-                    )
+                    print(f"{GREEN}✅ ADB + U2 prêts !{RESET}", flush=True)
+                    return True
+    
+                elif f"{target}\toffline" in devices_out:
+                    print(f"{RED}⚠️ Toujours offline, redémarrage du serveur ADB...{RESET}", flush=True)
+                    subprocess.run(["adb", "kill-server"], capture_output=True, timeout=8)
                     time.sleep(1)
+                    subprocess.run(["adb", "start-server"], capture_output=True, timeout=8)
+                    time.sleep(1)
+                    continue
     
-                    # ÉTAPE 5 : Vérification finale
-                    final_check = subprocess.run(
-                        ["adb", "-s", target, "shell", "echo", "ok"],
-                        capture_output=True, text=True, timeout=5
-                    )
-                    if "ok" in final_check.stdout:
-                        print(f"{GREEN}✅ ADB + U2 prêts !{RESET}", flush=True)
-                        return True
-                    else:
-                        print(f"{RED}⚠️ Connexion instable, nouvelle tentative...{RESET}", flush=True)
-    
-                time.sleep(2)
+                else:
+                    time.sleep(2)
+                    continue
     
             except Exception as e:
                 print(f"{RED}⚠️ Erreur tentative {attempt+1} : {e}{RESET}", flush=True)
@@ -195,14 +187,16 @@ class TikTokTaskBot:
             json.dump(data, f, indent=4)
 
     def _adb_keepalive_loop(self):
-        """Tourne en arrière-plan, reconnecte ADB toutes les 5 secondes"""
         while self.keepalive_running:
             if self.device_ip:
                 target = f"{self.device_ip}:5555"
-                subprocess.run(
-                    ["adb", "connect", target],
-                    capture_output=True, timeout=4
-                )
+                try:
+                    subprocess.run(
+                        ["adb", "connect", target],
+                        capture_output=True, timeout=8
+                    )
+                except Exception:
+                    pass  # on ignore, on retentera dans 5s
             time.sleep(5)
 
     def start_adb_keepalive(self):
@@ -886,7 +880,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
