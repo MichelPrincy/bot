@@ -7,18 +7,16 @@ import subprocess
 import time
 import requests
 import threading
-# Ajoute cet import en haut
 from supabase import create_client, Client, ClientOptions
 import uiautomator2 as u2
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
-from supabase import create_client, Client # Import Supabase
+from supabase import create_client, Client
 
 # ================== CONFIGURATION SUPABASE ==================
-# REMPLACE CECI PAR TES INFOS SUPABASE
-SUPABASE_URL = "https://kxgowljjsnlcdijcntzv.supabase.co" 
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Z293bGpqc25sY2RpamNudHp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyNzExMjQsImV4cCI6MjA4NTg0NzEyNH0.6DQsDuqMV_1_ZAXLdEZCs9qUVjEzvSz2p6ucoNoqxNs" 
+SUPABASE_URL = "https://kxgowljjsnlcdijcntzv.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Z293bGpqc25sY2RpamNudHp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyNzExMjQsImV4cCI6MjA4NTg0NzEyNH0.6DQsDuqMV_1_ZAXLdEZCs9qUVjEzvSz2p6ucoNoqxNs"
 
 # ================== COULEURS & STYLES ==================
 RED = "\033[91m"
@@ -45,6 +43,7 @@ GAIN_FOLLOW = 3.0
 APP_CHOOSER = {
     1: "150 1800",
 }
+
 # ================== TELEGRAM ==================
 API_ID = 21426921
 API_HASH = "07a304c39fc55aca132175b1dce4ad55"
@@ -55,31 +54,25 @@ def clear_screen():
     os.system("clear")
 
 class TikTokTaskBot:
-    
+
     def __init__(self):
         self.accounts = self.load_json("accounts.json", [])
         self.paused_accounts = self.load_json("paused.json", [])
         self.stats = self.load_json("stats.json", {"earned": 0.0, "tasks": 0})
         self.index = 0
         self.device_id = None
-        self.device_ip = None
+        self.device_ip = None  # ← IP WiFi ADB
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
-        self.d = None 
-        self.last_sent_msg = "TikTok" 
-        # 👇 NOUVEAU : Initialiser le chronomètre
+        self.d = None
+        self.last_sent_msg = "TikTok"
         self.last_activity_time = time.time()
-        
-        # --- SUPABASE INIT ---
-        
-        
-        # Modifie la ligne dans ton __init__
         self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         self.user_session_file = "user_session.json"
-        self.current_user = None # Stockera les infos de l'utilisateur connecté
+        self.current_user = None
         self.dynamic_chooser = APP_CHOOSER.copy()
 
-
+    # ================== ADB WIFI ==================
 
     def ask_and_connect_adb(self):
         """Demande l'IP WiFi, connecte ADB pour la session"""
@@ -87,19 +80,19 @@ class TikTokTaskBot:
         print(f"{CYAN}📡 CONNEXION ADB WiFi{RESET}")
         print(f"{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
         ip = input(f"{BOLD}📍 Entrez l'IP WiFi du téléphone\n   (ex: 192.168.1.103) : {RESET}").strip()
-    
+
         if not ip:
             print(f"{RED}❌ IP invalide.{RESET}")
             return self.ask_and_connect_adb()
-    
+
         self.device_ip = ip
         target = f"{ip}:5555"
-    
+
         print(f"{YELLOW}🔌 Lancement : adb connect {target}...{RESET}")
         result = subprocess.run(["adb", "connect", target], capture_output=True, text=True)
         output = result.stdout.strip()
         print(f"{WHITE}{output}{RESET}")
-    
+
         if "connected" in output.lower() or "already connected" in output.lower():
             self.device_id = target
             self.adb = f"adb -s {target} shell"
@@ -116,22 +109,21 @@ class TikTokTaskBot:
                 return self.ask_and_connect_adb()
             exit()
 
-   def reconnect_adb(self, retries=3):
+    def reconnect_adb(self, retries=3):
         """Déconnecte, reconnecte ADB et uiautomator2 avant chaque tâche"""
         if not self.device_ip:
             return False
-    
+
         target = f"{self.device_ip}:5555"
-    
+
         for attempt in range(retries):
             try:
                 print(f"{YELLOW}🔄 Reconnexion ADB ({attempt+1}/{retries})...{RESET}", flush=True)
-    
+
                 # ÉTAPE 1 : Déconnexion propre
-                subprocess.run(["adb", "disconnect", target],
-                               capture_output=True, timeout=5)
+                subprocess.run(["adb", "disconnect", target], capture_output=True, timeout=5)
                 time.sleep(1)
-    
+
                 # ÉTAPE 2 : Reconnexion
                 result = subprocess.run(
                     ["adb", "connect", target],
@@ -139,11 +131,11 @@ class TikTokTaskBot:
                 )
                 output = result.stdout.strip()
                 print(f"{WHITE}  → {output}{RESET}", flush=True)
-    
+
                 if "connected" in output.lower():
                     self.device_id = target
                     self.adb = f"adb -s {target} shell"
-    
+
                     # ÉTAPE 3 : Réinitialiser uiautomator2
                     try:
                         self.d = u2.connect(target)
@@ -153,22 +145,25 @@ class TikTokTaskBot:
                         return True
                     except Exception as e:
                         print(f"{RED}⚠️ U2 échoué : {e}{RESET}", flush=True)
-    
+
                 time.sleep(2)
-    
+
             except Exception as e:
                 print(f"{RED}⚠️ Erreur tentative {attempt+1} : {e}{RESET}", flush=True)
                 time.sleep(2)
-    
+
         print(f"{RED}❌ Reconnexion impossible après {retries} tentatives.{RESET}", flush=True)
         return False
+
+    # ================== JSON ==================
 
     def load_json(self, file, default):
         if os.path.exists(file):
             try:
                 with open(file, "r") as f:
                     return json.load(f)
-            except: return default
+            except:
+                return default
         return default
 
     def save_json(self, file, data):
@@ -176,19 +171,20 @@ class TikTokTaskBot:
             json.dump(data, f, indent=4)
 
     # ================== GESTION UTILISATEUR (SUPABASE) ==================
+
     def authenticate_user(self):
         """Gère la connexion et charge les coordonnées personnalisées"""
         clear_screen()
         print(f"{CYAN}🔒 AUTHENTIFICATION UTILISATEUR{RESET}")
-        
+
         nom = ""
         password = ""
-        
+
         if os.path.exists(self.user_session_file):
             session_data = self.load_json(self.user_session_file, {})
             nom = session_data.get("nom")
             password = session_data.get("pass")
-        
+
         if not nom or not password:
             print(f"{WHITE}Veuillez vous connecter (Infos Database){RESET}")
             nom = input(f"{BOLD}Nom d'utilisateur : {RESET}")
@@ -197,56 +193,48 @@ class TikTokTaskBot:
         print(f"{YELLOW}🌐 Vérification auprès du serveur...{RESET}")
 
         try:
-            # 1. Connexion Utilisateur
             response = self.supabase.table("userbot").select("*").eq("nom", nom).eq("pass", password).execute()
-            
+
             if response.data and len(response.data) > 0:
                 self.current_user = response.data[0]
                 print(f"{GREEN}✅ Connexion réussie ! Bienvenue {self.current_user['nom']}.{RESET}")
-                
+
                 self.save_json(self.user_session_file, {"nom": nom, "pass": password})
                 self.check_limits_strict()
 
-                # ==========================================================
-                # 2. CHARGEMENT DES COORDONNÉES (AVEC RETRY)
-                # ==========================================================
                 print(f"{CYAN}📐 Chargement de la configuration écran...{RESET}")
                 user_id = self.current_user['id']
-                
-                # --- NOUVEAU CODE : Boucle de réessai ---
+
                 conf_resp = None
                 for tentative in range(3):
                     try:
                         conf_resp = self.supabase.table("user_config").select("coords").eq("user_id", user_id).execute()
-                        break  # Si ça marche, on sort de la boucle
+                        break
                     except Exception as e:
-                        if tentative == 2: # Si c'est le 3ème échec, on lève l'erreur
+                        if tentative == 2:
                             raise e
-                        time.sleep(0.5) # Petite pause d'une demi-seconde avant de réessayer
-                # ----------------------------------------
-                
+                        time.sleep(0.5)
+
                 if conf_resp.data and len(conf_resp.data) > 0:
-                    # Cas 1 : Config trouvée en DB
                     raw_coords = conf_resp.data[0]['coords']
-                    # Conversion des clés JSON (str) en int pour le script
                     self.dynamic_chooser = {int(k): v for k, v in raw_coords.items()}
                     print(f"{GREEN}✅ Coordonnées personnalisées chargées.{RESET}")
                 else:
-                    # Cas 2 : Pas de config, on crée celle par défaut en DB
                     print(f"{YELLOW}⚠️ Aucune config trouvée, création des défauts...{RESET}")
-                    default_coords = APP_CHOOSER # Utilise la constante globale
+                    default_coords = APP_CHOOSER
                     self.supabase.table("user_config").insert({
                         "user_id": user_id,
                         "coords": default_coords
                     }).execute()
                     self.dynamic_chooser = default_coords
                     print(f"{GREEN}💾 Configuration par défaut sauvegardée en DB.{RESET}")
-                
+
                 time.sleep(2)
                 return True
             else:
                 print(f"{RED}❌ Identifiants incorrects.{RESET}")
-                if os.path.exists(self.user_session_file): os.remove(self.user_session_file)
+                if os.path.exists(self.user_session_file):
+                    os.remove(self.user_session_file)
                 input("Appuyez sur Entrée...")
                 return self.authenticate_user()
 
@@ -256,7 +244,8 @@ class TikTokTaskBot:
 
     def check_limits_strict(self):
         """Vérifie si cashnow >= max. Si oui, bloque tout."""
-        if not self.current_user: return
+        if not self.current_user:
+            return
 
         cashnow = float(self.current_user['cashnow'])
         maximum = float(self.current_user['max'])
@@ -266,8 +255,8 @@ class TikTokTaskBot:
             print(f"""
 {RED}██████╗ ██╗      ██████╗  ██████╗██╗  ██╗
 ██╔══██╗██║     ██╔═══██╗██╔════╝██║ ██╔╝
-██████╔╝██║     ██║   ██║██║     █████╔╝ 
-██╔══██╗██║     ██║   ██║██║     ██╔═██╗ 
+██████╔╝██║     ██║   ██║██║     █████╔╝
+██╔══██╗██║     ██║   ██║██║     ██╔═██╗
 ██████╔╝███████╗╚██████╔╝╚██████╗██║  ██╗
 ╚═════╝ ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
@@ -289,23 +278,20 @@ votre limite de CashCoin.
     def update_cashcoin(self, amount):
         """Ajoute le gain à la DB et vérifie la limite"""
         try:
-            # 1. Récupérer les données fraîches pour éviter les conflits
             user_id = self.current_user['id']
             refresh = self.supabase.table("userbot").select("*").eq("id", user_id).execute()
-            
+
             if refresh.data:
                 self.current_user = refresh.data[0]
                 current_cash = float(self.current_user['cashnow'])
                 new_cash = current_cash + amount
-                
-                # 2. Mise à jour Supabase
+
                 self.supabase.table("userbot").update({"cashnow": new_cash}).eq("id", user_id).execute()
                 print(f"{MAGENTA}💾 DB Updated: {current_cash:.2f} -> {new_cash:.2f} CC{RESET}")
-                
-                # 3. Mettre à jour l'objet local et vérifier la limite
+
                 self.current_user['cashnow'] = new_cash
                 self.check_limits_strict()
-                
+
         except Exception as e:
             print(f"{RED}⚠️ Erreur mise à jour DB : {e}{RESET}")
 
@@ -319,11 +305,10 @@ votre limite de CashCoin.
             if current_name not in self.paused_accounts:
                 return self.index
         print(f"{RED}⚠️ ATTENTION : Tous les comptes sont en pause !{RESET}")
-        return start_index 
+        return start_index
 
     async def send_bot_command(self, message):
         self.last_sent_msg = message
-        # 👇 NOUVEAU : Mettre à jour le chrono
         self.last_activity_time = time.time()
         await self.client.send_message(TARGET_BOT, message)
 
@@ -337,9 +322,11 @@ votre limite de CashCoin.
                     f.write(response.text)
                 print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
                 exit()
-        except Exception: pass
+        except Exception:
+            pass
 
     # ---------- ADB & UIAUTOMATOR ----------
+
     def detect_device(self):
         try:
             out = subprocess.check_output(["adb", "devices"]).decode()
@@ -350,20 +337,21 @@ votre limite de CashCoin.
                     self.adb = f"adb -s {self.device_id} shell"
                     found = True
                     break
-            
+
             if found:
                 try:
                     if self.d is None:
                         print(f"{YELLOW}🔌 Connexion uiautomator2...{RESET}")
                         self.d = u2.connect(self.device_id)
-                        self.d.implicitly_wait(10.0) 
+                        self.d.implicitly_wait(10.0)
                         self.d.settings['operation_delay'] = (0.2, 0.2)
                         print(f"{GREEN}✅ Uiautomator2 Connecté!{RESET}")
                 except Exception as e:
                     print(f"{RED}Erreur connexion U2: {e}{RESET}")
                 return True
             return False
-        except: return False
+        except:
+            return False
 
     def cleanup_apps(self):
         os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE} > /dev/null 2>&1")
@@ -373,102 +361,82 @@ votre limite de CashCoin.
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
     # ---------- ALARME SONORE ----------
+
     def play_alarm_loop(self):
         """Joue le son ET vibre en boucle"""
         print(f"{RED}{BOLD}🔊 SONNERIE ET VIBRATION ACTIVÉES !{RESET}")
-        
+
         while self.alarm_active:
-            # 1. Jouer le son avec termux-media-player (votre commande)
             if os.path.exists("alarm.mp3"):
                 os.system("mpv alarm.mp3 > /dev/null 2>&1")
             else:
-                os.system(f"{self.adb} input keyevent 24") # Beep volume si pas de mp3
-            
-            # 2. Vibreur via ADB (votre commande)
-            # On lance 3 vibrations rapides
+                os.system(f"{self.adb} input keyevent 24")
+
             os.system(f"{self.adb} cmd vibrator vibrate 1000")
-            time.sleep(4) # Attendre que la vibration finisse
-            
-            # Petite pause avant de recommencer la boucle si le MP3 est court
-            # Si le MP3 est long, termux-media-player rend la main tout de suite, 
-            # donc on peut ajouter un sleep ici pour ne pas spammer la commande play
             time.sleep(4)
+            time.sleep(4)
+
     async def trigger_manual_check(self):
         """Active le volume MEDIA max et lance la boucle de son"""
-        
-        # 1. Monter le volume MEDIA (Stream 3) au maximum
-        # Stream 3 = Musique/Média. On le force à 15 (le max standard sur Android)
         print(f"{YELLOW}🔊 Augmentation du volume MÉDIA...{RESET}")
-        
-        # Méthode 1 : La plus propre (Android 10+)
-        # --stream 3 cible la musique, --set 15 met le volume à fond direct
         os.system(f"{self.adb} cmd media_session volume --stream 3 --set 30")
-        
-        # Méthode 2 (Sécurité) : Si la commande du dessus échoue, on utilise l'ancienne méthode
-        # MAIS on lance le son AVANT de monter le volume pour être sûr de cibler le média
+
         self.alarm_active = True
         alarm_thread = threading.Thread(target=self.play_alarm_loop)
         alarm_thread.start()
-        
-        # On attend un tout petit peu que le lecteur audio prenne la priorité
-        await asyncio.sleep(0.5) 
-        
-        # Petite rafale de Volume Up au cas où le "set 15" n'a pas marché
-        for _ in range(5): 
-             os.system(f"{self.adb} input keyevent 24")
 
-        # 3. Attendre l'action de l'utilisateur
+        await asyncio.sleep(0.5)
+
+        for _ in range(5):
+            os.system(f"{self.adb} input keyevent 24")
+
         print(f"\n{RED}████████████████████████████████████████{RESET}")
         print(f"{RED}🚨  SECURITY CHECK COMPLEXE DÉTECTÉ !  🚨{RESET}")
         print(f"{YELLOW}👉 Résous le captcha sur ton téléphone.{RESET}")
         print(f"{YELLOW}👉 Une fois fini, appuie sur [ENTRÉE] ici.{RESET}")
         print(f"{RED}████████████████████████████████████████{RESET}\n")
-        
-        # Astuce: input() est bloquant
+
         await asyncio.to_thread(input, f"{BOLD}Appuie sur Entrée pour arrêter l'alarme...{RESET}")
-        
-        # 4. Arrêter le son et le player Termux
+
         self.alarm_active = False
-        os.system("termux-media-player stop") # Arrêt immédiat du son
+        os.system("termux-media-player stop")
         print(f"{GREEN}✅ Alarme arrêtée. Reprise du script...{RESET}")
         alarm_thread.join()
-    # ---------- ACTIONS  ----------
+
+    # ---------- ACTIONS ----------
+
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
-            
+            # ✅ RECONNEXION EN TOUT PREMIER — avant toute action ADB
+            if not self.reconnect_adb():
+                print(f"{RED}❌ Appareil non disponible. Tâche annulée.{RESET}", flush=True)
+                return False
+
             self.cleanup_apps()
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
-            
+
             # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(7)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(30) # Chargement
+            await asyncio.sleep(30)  # Chargement
 
             # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            # ← AJOUTER CES LIGNES EN PREMIER
-            print(f"{YELLOW}🔄 Reconnexion ADB...{RESET}", flush=True)
-            self.reconnect_adb()
-            if not self.reconnect_adb():
-            print(f"{RED}❌ Appareil non disponible. Tâche annulée.{RESET}", flush=True)
-            return False
-            # ← FIN DES LIGNES AJOUTÉES
-            
-            print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
+
+            print(f"{YELLOW}⏳ Attente stricte 15s...{RESET}", flush=True)
             await asyncio.sleep(15)
 
             # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
             action_lower = action.lower()
-            
+
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
                 print(f"{MAGENTA}    💬 Mode Commentaire (Stratégie Clavier Fixe)...{RESET}", flush=True)
-                # 👇 NOUVEAU : Reconnexion forcée de UI Automator 2 avant le commentaire
                 print(f"{YELLOW}🔌 Reconnexion de uiautomator2 en cours...{RESET}")
                 try:
                     self.d = u2.connect(self.device_id)
@@ -476,68 +444,53 @@ votre limite de CashCoin.
                     self.d.settings['operation_delay'] = (0.2, 0.2)
                 except Exception as e:
                     print(f"{RED}⚠️ Erreur lors de la reconnexion U2 : {e}{RESET}")
-                # 👆 FIN DU NOUVEAU BLOC
-                
-                # 1. Cliquer sur l'icône commentaire
+
                 os.system(f"{self.adb} input tap 1000 1500")
                 await asyncio.sleep(3)
-            
+
                 if self.d(className="android.widget.EditText").exists(timeout=5):
-                    # 2. Cliquer sur le champ texte pour s'assurer du focus
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
-                    
+
                     text_to_send = specific_text if specific_text else "Wow super video 🔥"
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    
-                    # Écriture du texte
-                    # Stratégie 1 : clipboard (la plus fiable)
+
                     try:
-                        import subprocess
                         subprocess.run(
                             f'adb -s {self.device_id} shell am broadcast -a clipper.set -e text "{text_to_send}"',
                             shell=True
                         )
-                        # Coller avec CTRL+V via keyevent
-                        os.system(f"{self.adb} input keyevent 279")  # KEYCODE_PASTE
+                        os.system(f"{self.adb} input keyevent 279")
                         await asyncio.sleep(1)
                         print(f"{GREEN}    -> Texte collé via clipboard{RESET}")
                     except:
-                        # Stratégie 2 : send_keys UI2
                         try:
                             self.d(className="android.widget.EditText").set_text(text_to_send)
                         except:
-                            # Stratégie 3 : ADB input text
                             import base64
                             b64 = base64.b64encode(text_to_send.encode()).decode()
                             os.system(f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}")
-                    
-                    # Petite pause pour laisser le texte s'afficher
+
                     await asyncio.sleep(1)
-            
-                    # --- EXÉCUTION DIRECTE DE LA SUITE ---
-                    # 3. Cliquer sur (575, 554) pour désactiver/réduire le clavier
+
                     print(f"{CYAN}    -> Réduction du clavier (clic zone neutre)...{RESET}")
                     os.system(f"{self.adb} input tap 500 400")
-                    await asyncio.sleep(1.5) 
-            
-                    # 4. Envoyer avec les coordonnées fixes (965, 2095)
+                    await asyncio.sleep(1.5)
+
                     print(f"{GREEN}    -> Envoi (Coordonnées fixes : 950, 2140)...{RESET}")
-                    # Chercher le bouton Send par description ou ID
                     send_btn = self.d(descriptionContains="Send") or \
                                self.d(resourceIdMatches=".*send.*") or \
                                self.d(textContains="Post")
-                    
+
                     if send_btn.exists(timeout=3):
                         send_btn.click()
                     else:
-                        os.system(f"{self.adb} input tap 960 2085")  # fallback coordonnées
-                    
+                        os.system(f"{self.adb} input tap 960 2085")
+
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
-                    
-                    # 5. Fermer la fenêtre des commentaires (cliquer en haut)
-                    os.system(f"{self.adb} input tap 500 200") 
+
+                    os.system(f"{self.adb} input tap 500 200")
                 else:
                     print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
 
@@ -551,27 +504,27 @@ votre limite de CashCoin.
                         print(f"{GREEN}    -> Clic sur '{keyword}'{RESET}")
                         clicked = True
                         break
-                
+
                 if not clicked:
                     if self.d(resourceIdMatches=".*follow_btn.*").exists:
-                         self.d(resourceIdMatches=".*follow_btn.*").click()
-                         print(f"{GREEN}    -> Clic sur Follow (via ID){RESET}")
+                        self.d(resourceIdMatches=".*follow_btn.*").click()
+                        print(f"{GREEN}    -> Clic sur Follow (via ID){RESET}")
                     else:
                         print(f"{RED}    ❌ Bouton Follow introuvable{RESET}")
-            
+
             # --- LIKE ---
             else:
                 print(f"{CYAN}    ❤️  Mode Like...{RESET}", flush=True)
-                self.d.click(0.5, 0.5) 
+                self.d.click(0.5, 0.5)
                 await asyncio.sleep(0.5)
-            
+
                 liked_success = False
                 if self.d(descriptionMatches=LIKE_DESC_REGEX).exists:
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
                     liked_success = True
                 elif not liked_success:
                     print(f"{MAGENTA}    🚀 Fallback : DOUBLE TAP{RESET}")
-                    self.d.double_click(0.5, 0.5, duration=0.1) 
+                    self.d.double_click(0.5, 0.5, duration=0.1)
                     liked_success = True
 
             await asyncio.sleep(3)
@@ -584,75 +537,62 @@ votre limite de CashCoin.
             return False
 
     # ---------- TELEGRAM ----------
+
     async def start_telegram(self):
-        # Vérification DB avant de démarrer le bot
         self.check_limits_strict()
 
         if not self.detect_device():
             print(f"{RED}❌ ADB non détecté.{RESET}", flush=True)
             input("Appuie sur Entrée...")
             return
-        
+
         await self.client.start()
         self.client.remove_event_handler(self.on_message)
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
-        # 👇 NOUVEAU : Lancer la tâche de surveillance en arrière-plan
         self.client.loop.create_task(self.timeout_watcher())
-        
+
         if not self.accounts:
             print(f"{RED}⚠️ Aucun compte configuré !{RESET}")
             return
 
         current_acc = self.accounts[self.index]
         print(f"\n{BOLD}{WHITE}🚀 Démarrage sur : {CYAN}{current_acc}{RESET}", flush=True)
-        
-        await self.send_bot_command("TikTok") 
+
+        await self.send_bot_command("TikTok")
         await self.client.run_until_disconnected()
-        
+
     async def timeout_watcher(self):
-        """Surveille s'il n'y a pas de réponse du bot après 2 minutes (120 secondes)."""
+        """Surveille s'il n'y a pas de réponse du bot après 200 secondes."""
         while True:
-            # Vérifie l'état toutes les 10 secondes pour ne pas surcharger le processeur
-            await asyncio.sleep(10) 
-            
-            # Si le temps actuel moins le temps de la dernière activité dépasse 120 secondes
+            await asyncio.sleep(10)
+
             if time.time() - self.last_activity_time > 200:
                 if self.last_sent_msg:
-                    print(f"\n{RED}⏳ Timeout détecté (2 min sans réponse). Le réseau ou le bot a buggé.{RESET}")
+                    print(f"\n{RED}⏳ Timeout détecté. Le réseau ou le bot a buggé.{RESET}")
                     print(f"{CYAN}🔄 Renvoi de la dernière commande : {self.last_sent_msg}{RESET}")
-                    
-                    # On reset le timer immédiatement pour éviter le spam
+
                     self.last_activity_time = time.time()
-                    
-                    # On relance la commande bloquée
                     await self.send_bot_command(self.last_sent_msg)
 
     async def on_message(self, event):
-        # 👇 NOUVEAU : Mettre à jour le chrono car on a reçu une réponse
         self.last_activity_time = time.time()
         text = event.message.message or ""
         buttons = event.message.buttons
 
         # =========================================================================
-        # 🛡️ GESTION DU SECURITY CHECK 
+        # 🛡️ GESTION DU SECURITY CHECK
         # =========================================================================
         if "Security check" in text and "verification" in text:
             print(f"\n{RED}{BOLD}🛡️ SECURITY CHECK DETECTÉ !{RESET}")
-            # --- DETECTION DU TYPE DE CHECK ---
-            # Si le texte contient "Correct answer", "emoji" ou "image", c'est le check difficile
             is_hard_check = "Correct answer" in text or "emoji" in text or "image" in text
 
             if is_hard_check:
-                # 🚨 CAS 2 : CHALLENGE COMPLEXE -> ALARME
                 await self.trigger_manual_check()
-                
-                # Une fois que l'utilisateur a appuyé sur Entrée :
                 print(f"{CYAN}🔄 Renvoi de la dernière commande après résolution manuelle...{RESET}")
                 await self.send_bot_command(self.last_sent_msg)
                 return
 
             else:
-                # 🤖 CAS 1 : CHECK SIMPLE -> AUTO-SOLVE (Ton ancien code)
                 full_link = None
                 if event.message.entities:
                     for entity in event.message.entities:
@@ -660,27 +600,27 @@ votre limite de CashCoin.
                             if "smmkingdom.com" in entity.url:
                                 full_link = entity.url
                                 break
-                
+
                 if not full_link:
                     url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
                     if url_match:
                         full_link = url_match.group(1).rstrip(')')
-    
+
                 if full_link:
                     print(f"{WHITE}🔗 Lien Captcha Trouvé : {CYAN}{full_link}{RESET}")
                     print(f"{YELLOW}🌍 Ouverture Chrome...{RESET}")
                     cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{full_link}" > /dev/null 2>&1'
                     os.system(cmd_open)
-                    
+
                     print(f"{YELLOW}⏱️  Attente 25 secondes pour chargement...{RESET}")
                     await asyncio.sleep(25)
-                    
-                    print(f"{YELLOW}point_up  Tentative de clic sur le bouton de vérification...{RESET}")
+
+                    print(f"{YELLOW}👆 Tentative de clic sur le bouton de vérification...{RESET}")
                     try:
-                        d = u2.connect() 
+                        d = u2.connect()
                         if d(textContains="Continue").exists(timeout=5):
                             d(textContains="Continue").click()
-                            print(f"{GREEN}✅ Clic effectué sur 'Click here'{RESET}")
+                            print(f"{GREEN}✅ Clic effectué sur 'Continue'{RESET}")
                         elif d(textContains="Verify").exists(timeout=2):
                             d(textContains="Verify").click()
                             print(f"{GREEN}✅ Clic effectué sur 'Verify'{RESET}")
@@ -692,12 +632,12 @@ votre limite de CashCoin.
                         await asyncio.sleep(5)
                     except Exception as e:
                         print(f"{RED}❌ Erreur uiautomator2 : {e}{RESET}")
-    
+
                     print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
                     os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
                     os.system(f"{self.adb} am kill-all > /dev/null 2>&1")
                     self.focus_termux()
-                    
+
                     print(f"{GREEN}✅ Vérification terminée.{RESET}")
                     print(f"{CYAN}🔄 Renvoi de la dernière commande : {BOLD}{self.last_sent_msg}{RESET}")
                     await self.send_bot_command(self.last_sent_msg)
@@ -717,21 +657,22 @@ votre limite de CashCoin.
                         break
             if not full_link:
                 match = re.search(r"Link\s*:\s*(https?://\S+)", text)
-                if match: full_link = match.group(1)
+                if match:
+                    full_link = match.group(1)
 
             if full_link:
                 action = re.search(r"Action\s*:\s*(.+)", text).group(1)
                 print(f"\n{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}", flush=True)
                 print(f"{WHITE}🔗 Task: {BOLD}{action}{RESET}", flush=True)
-                
+
                 # --- COMMENTAIRE ---
                 if "comment" in action.lower():
-                    await asyncio.sleep(0.5) 
+                    await asyncio.sleep(0.5)
                     history = await self.client.get_messages(TARGET_BOT, limit=1)
                     comment_text = history[0].message if history else None
                     if comment_text and "Link :" in comment_text:
                         comment_text = "Wow amazing video 🔥"
-                    
+
                     success = await self.do_task(self.index + 1, full_link, action, specific_text=comment_text)
 
                     if success:
@@ -739,11 +680,7 @@ votre limite de CashCoin.
                         self.stats["earned"] += local_gain
                         self.stats["tasks"] += 1
                         self.save_json("stats.json", self.stats)
-                        
-                        # --- SUPABASE UPDATE ---
                         self.update_cashcoin(local_gain)
-                        # -----------------------
-
                         print(f"{GREEN}✅ COMMENT TERMINE (+{local_gain}){RESET}")
 
                         if buttons:
@@ -758,20 +695,16 @@ votre limite de CashCoin.
                 # --- LIKE / FOLLOW ---
                 else:
                     success = await self.do_task(self.index + 1, full_link, action)
-                    
+
                     if success:
                         local_gain = GAIN_FOLLOW if ("follow" in action.lower() or "profile" in action.lower()) else GAIN_LIKE
                         self.stats["earned"] += local_gain
                         self.stats["tasks"] += 1
                         self.save_json("stats.json", self.stats)
-
-                        # --- SUPABASE UPDATE ---
                         self.update_cashcoin(local_gain)
-                        # -----------------------
-
                         print(f"{GREEN}✅ TASK TERMINE (+{local_gain}){RESET}")
                         print(f"{CYAN}➡️  Validation Task...{RESET}", flush=True)
-                        
+
                         if buttons:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
@@ -792,7 +725,7 @@ votre limite de CashCoin.
             print(f"{RED}🚫 Pas de task sur ce compte.{RESET}", flush=True)
             self.get_next_active_index()
             next_acc = self.accounts[self.index]
-            
+
             if next_acc in self.paused_accounts:
                 print(f"{RED}Tous les comptes sont en pause.{RESET}")
                 await self.client.disconnect()
@@ -805,14 +738,13 @@ votre limite de CashCoin.
 
         # --- 4. GESTION BOUTONS COMPTE ---
         elif buttons and "Link" not in text:
-            # 🔒 CAS SPECIAL : Figé sur la liste des comptes (menu réseau social)
             if "Choose social network" in text:
                 print(f"{YELLOW}🔄 Figé sur menu réseau. Envoi Back + TikTok...{RESET}")
                 await self.send_bot_command("🔙Back")
                 await asyncio.sleep(2)
                 await self.send_bot_command("TikTok")
                 return
-        
+
             target = self.accounts[self.index]
             clicked = False
             for i, row in enumerate(buttons):
@@ -825,7 +757,6 @@ votre limite de CashCoin.
                         return
             if not clicked and "Select account" in text:
                 print(f"{RED}Compte {target} introuvable.{RESET}", flush=True)
-
 
         # --- COMPTE EN RÉVISION ---
         elif "is on review now" in text:
@@ -850,10 +781,9 @@ votre limite de CashCoin.
             await self.send_bot_command("TikTok")
             return
 
-        
         # --- 5. COMPTE A RÉPARER ---
         elif "🔴 Account" in text or "too" in text:
-            print(f"{YELLOW}⚠️ Compte à réparer ({warning_count} warnings) : passage au suivant.{RESET}", flush=True)
+            print(f"{YELLOW}⚠️ Compte à réparer : passage au suivant.{RESET}", flush=True)
             self.get_next_active_index()
             next_acc = self.accounts[self.index]
             if next_acc in self.paused_accounts:
@@ -864,33 +794,24 @@ votre limite de CashCoin.
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
 
-        # ==========================================
-        # --- AJOUTS POUR LES PROBLÈMES 2 ET 3 ---
-        # ==========================================
-
-        # PROBLÈME 2 : Le Timeout de 2 minutes
+        # --- TIMEOUT DE TÂCHE ---
         elif "The task wasn't completed within 2 minutes" in text:
             print(f"{YELLOW}⏳ Timeout de tâche détecté. Fermeture de TikTok et relance...{RESET}")
-            
-            # --- NOUVEAUTÉ : Fermeture de l'application ---
-            self.cleanup_apps()  # Force l'arrêt du container clone
-            self.focus_termux()  # Ramène Termux au premier plan
-            await asyncio.sleep(1) # Petite pause pour laisser le téléphone respirer
-            # ----------------------------------------------
-
+            self.cleanup_apps()
+            self.focus_termux()
+            await asyncio.sleep(1)
             await self.send_bot_command("📝Tasks📝")
             await asyncio.sleep(2)
             await self.send_bot_command("TikTok")
-            return # On s'arrête là, le bot Telegram va envoyer les boutons VIP
-
-       
+            return
 
     # ---------- MENU PRINCIPAL ----------
+
     async def menu(self):
-        # ← AJOUTER EN PREMIER (avant authenticate_user)
+        # 1. Connexion ADB WiFi en premier
         self.ask_and_connect_adb()
-        # ← FIN
-        # AUTHENTIFICATION OBLIGATOIRE AU DÉMARRAGE
+
+        # 2. Authentification Supabase
         self.authenticate_user()
 
         while True:
@@ -898,8 +819,7 @@ votre limite de CashCoin.
             adb_status = f"{GREEN}CONNECTÉ{RESET}" if self.detect_device() else f"{RED}DÉCONNECTÉ{RESET}"
             acc_count = len(self.accounts)
             total_earned = self.stats.get("earned", 0.0)
-            
-            # Affichage de l'utilisateur connecté
+
             user_info = f"{CYAN}{self.current_user['nom']}{RESET}" if self.current_user else "Inconnu"
             db_cash = f"{YELLOW}{self.current_user['cashnow']}/{self.current_user['max']}{RESET}" if self.current_user else "0/0"
 
@@ -911,7 +831,7 @@ votre limite de CashCoin.
 ███████║██║     ███████╗███████╗██████╔╝
 ╚══════╝╚═╝     ╚══════╝╚══════╝╚═════╝ {RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
@@ -930,9 +850,9 @@ votre limite de CashCoin.
             choice = input(f"{BOLD}{BLUE}➜ CHOIX : {RESET}")
 
             if choice == "1":
-                if self.accounts: 
-                    self.stats["earned"] = 0.0   
-                    self.stats["tasks"] = 0        
+                if self.accounts:
+                    self.stats["earned"] = 0.0
+                    self.stats["tasks"] = 0
                     self.save_json("stats.json", self.stats)
                     print(f"{GREEN}💰 Compteur remis à 0 pour cette session.{RESET}")
                     await asyncio.sleep(1)
@@ -945,7 +865,8 @@ votre limite de CashCoin.
                     clear_screen()
                     print(f"{CYAN}=== ➕ AJOUT DE COMPTE ==={RESET}")
                     name = input(f"Nom du compte n°{len(self.accounts)+1} : ")
-                    if not name.strip(): break
+                    if not name.strip():
+                        break
                     if name not in self.accounts:
                         self.accounts.append(name)
                         self.save_json("accounts.json", self.accounts)
@@ -953,7 +874,7 @@ votre limite de CashCoin.
                         await asyncio.sleep(0.5)
 
             elif choice == "3":
-                while True: 
+                while True:
                     clear_screen()
                     print(f"{CYAN}=== 📋 GESTION ==={RESET}")
                     for i, acc in enumerate(self.accounts, 1):
@@ -965,22 +886,32 @@ votre limite de CashCoin.
                         try:
                             idx = int(input("Numéro : ")) - 1
                             target = self.accounts[idx]
-                            if target in self.paused_accounts: self.paused_accounts.remove(target)
-                            else: self.paused_accounts.append(target)
+                            if target in self.paused_accounts:
+                                self.paused_accounts.remove(target)
+                            else:
+                                self.paused_accounts.append(target)
                             self.save_json("paused.json", self.paused_accounts)
-                        except: pass
+                        except:
+                            pass
                     elif cmd == 's':
                         try:
                             idx = int(input("Numéro : ")) - 1
                             rem = self.accounts.pop(idx)
-                            if rem in self.paused_accounts: self.paused_accounts.remove(rem)
+                            if rem in self.paused_accounts:
+                                self.paused_accounts.remove(rem)
                             self.save_json("accounts.json", self.accounts)
-                        except: pass
-                    else: break
+                        except:
+                            pass
+                    else:
+                        break
 
-            elif choice == "4": self.detect_device()
-            elif choice == "5": self.update_script()
-            elif choice == "6": break
+            elif choice == "4":
+                self.detect_device()
+            elif choice == "5":
+                self.update_script()
+            elif choice == "6":
+                break
+
 
 if __name__ == "__main__":
     bot = TikTokTaskBot()
